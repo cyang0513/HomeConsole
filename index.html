@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Home Console</title>
+<style>
+  /* 1rem = 10% of the screen's short side (set from JS), so the layout scales to any landscape screen. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000; color: #e8eaed;
+    font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .emo { font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  #app {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    padding: .28rem .4rem .16rem;
+    -webkit-transform-origin: 0 0; transform-origin: 0 0;
+    transition: opacity 3s;
+  }
+  #app.night { opacity: .55; }
+
+  #top { flex: 1; display: flex; min-height: 0; }
+
+  /* ---------- Clock ---------- */
+  #clock { flex: 1.3; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding-right: .4rem; }
+  #timeRow { display: flex; align-items: flex-start; line-height: 1; white-space: nowrap; }
+  #hm { font-size: 3.2rem; font-weight: 200; letter-spacing: -.04em; color: #fff; }
+  #secBox { display: flex; flex-direction: column; margin-left: .14rem; padding-top: .38rem; }
+  #sec { font-size: .78rem; font-weight: 300; color: #9aa0a6; }
+  #ampm { font-size: .42rem; color: #9aa0a6; margin-top: .06rem; }
+  #date { font-size: .6rem; font-weight: 300; color: #bdc1c6; margin-top: .06rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #place { font-size: .5rem; color: #8ab4f8; margin-top: .3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #placeSub { font-size: .28rem; color: #80868b; margin-top: .04rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tz { font-size: .3rem; color: #9aa0a6; margin-top: .16rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tz2 { font-size: .26rem; color: #5f6368; margin-top: .04rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------- Current weather + daily ---------- */
+  #wx { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid #202124; padding-left: .4rem; }
+  #now { display: flex; align-items: center; height: 1.95rem; }
+  #nowIcon { font-size: 1.3rem; width: 1.8rem; text-align: center; line-height: 1; }
+  #nowMain { min-width: 0; flex: 1; margin-left: .1rem; }
+  #nowTemp { font-size: 1.45rem; font-weight: 300; line-height: 1; color: #fff; }
+  #nowDesc { font-size: .4rem; color: #bdc1c6; margin-top: .04rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nowDetails { font-size: .29rem; color: #9aa0a6; line-height: 1.55; margin-top: .06rem; }
+  #nowDetails span { display: inline-block; margin-right: .26rem; white-space: nowrap; }
+  #nowDetails b { color: #e8eaed; font-weight: 400; }
+
+  #daily { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; margin-top: .08rem; }
+  .day { display: flex; align-items: center; font-size: .34rem; height: .5rem; white-space: nowrap; }
+  .day .dn { width: 1.2rem; color: #bdc1c6; overflow: hidden; text-overflow: ellipsis; }
+  .day .di { width: .6rem; text-align: center; font-size: .36rem; }
+  .day .dp { width: .7rem; color: #8ab4f8; font-size: .26rem; text-align: right; padding-right: .1rem; }
+  .day .dl { width: .62rem; text-align: right; color: #9aa0a6; }
+  .day .dh { width: .62rem; text-align: left; color: #fff; }
+  .day .bar { flex: 1; position: relative; height: .07rem; margin: 0 .16rem; background: #26282b; border-radius: .04rem; }
+  .day .bar i { position: absolute; top: 0; bottom: 0; border-radius: .04rem; background: linear-gradient(90deg, #8ab4f8, #fdd663, #f28b82); }
+
+  /* ---------- Hourly ---------- */
+  #hourly { height: 2.25rem; display: flex; border-top: 1px solid #202124; margin-top: .12rem; padding-top: .1rem; }
+  .h { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-around; }
+  .h .ht { font-size: .27rem; color: #9aa0a6; }
+  .h .hi { font-size: .5rem; line-height: 1; }
+  .h .hv { font-size: .4rem; color: #fff; }
+  .h .hp { font-size: .24rem; color: #8ab4f8; height: .3rem; }
+
+  /* ---------- Status ---------- */
+  #status { height: .34rem; display: flex; align-items: flex-end; justify-content: space-between; font-size: .22rem; color: #5f6368; white-space: nowrap; }
+  #stErr { color: #f6ae2d; overflow: hidden; text-overflow: ellipsis; padding: 0 .3rem; flex: 1; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <section id="clock">
+      <div id="timeRow" class="num">
+        <span id="hm">--:--</span>
+        <span id="secBox"><span id="sec">--</span><span id="ampm"></span></span>
+      </div>
+      <div id="date">&nbsp;</div>
+      <div id="place">📍 Locating…</div>
+      <div id="placeSub">&nbsp;</div>
+      <div id="tz">&nbsp;</div>
+      <div id="tz2">&nbsp;</div>
+    </section>
+    <section id="wx">
+      <div id="now">
+        <div id="nowIcon" class="emo">⏳</div>
+        <div id="nowMain">
+          <div id="nowTemp" class="num">--°</div>
+          <div id="nowDesc">Loading weather…</div>
+        </div>
+      </div>
+      <div id="nowDetails" class="num"></div>
+      <div id="daily" class="num"></div>
+    </section>
+  </div>
+  <section id="hourly" class="num"></section>
+  <footer id="status"><span id="stLeft"></span><span id="stErr"></span><span id="stRight"></span></footer>
+</div>
+
+<script>
+/*
+ * Home Console – digital clock + weather for an old phone, hosted on GitHub Pages.
+ * Written in plain ES5 so it also runs on old Android browsers / WebViews.
+ *
+ * Optional URL parameters:
+ *   ?lat=59.33&lon=18.07   fixed location (skips GPS / Wi-Fi detection)
+ *   &name=Home             fixed location label
+ *   &units=imperial        °F and mph (default: metric)
+ *   &wind=ms|kmh|mph|kn    wind speed unit (default: km/h, mph for imperial)
+ *   &h12=1                 12-hour clock (default: 24-hour)
+ *   &tz=auto|device|Europe/Stockholm
+ *                          auto = time zone of the detected location (default),
+ *                          device = phone setting, or any IANA time zone name
+ *   &lang=sv               language for date and place names (default: browser language)
+ *   &dim=0                 do not dim the screen between sunset and sunrise
+ *   &rotate=0              do not rotate the layout when the phone is held in portrait
+ */
+(function () {
+  'use strict';
+
+  var REFRESH_MS = 15 * 60 * 1000;   // weather + location refresh
+  var RETRY_MS = 2 * 60 * 1000;      // retry after a failure
+  var RELOAD_MS = 12 * 60 * 60 * 1000; // full page reload (picks up new versions from GitHub Pages)
+
+  var q = parseQuery(window.location.search);
+  var CFG = {
+    lat: toNum(q.lat),
+    lon: toNum(q.lon),
+    name: q.name || '',
+    imperial: q.units === 'imperial' || q.units === 'f',
+    wind: q.wind || '',
+    h12: q.h12 === '1' || q.h12 === 'true',
+    tz: q.tz || 'auto',
+    lang: q.lang || navigator.language || 'en',
+    dim: q.dim !== '0',
+    rotate: q.rotate !== '0'
+  };
+  if (!CFG.wind) CFG.wind = CFG.imperial ? 'mph' : 'kmh';
+  var WIND_LABEL = { ms: 'm/s', kmh: 'km/h', mph: 'mph', kn: 'kn' };
+  if (!WIND_LABEL[CFG.wind]) CFG.wind = 'kmh';
+
+  var S = {
+    place: load('hc.place'),
+    wx: load('hc.wx'),
+    tz: null,
+    lastError: '',
+    nextAt: 0,
+    busySince: 0
+  };
+
+  var app = $('app');
+
+  // ---------------------------------------------------------------- helpers
+  function $(id) { return document.getElementById(id); }
+  function setText(id, s) { var el = $(id); if (el && el.textContent !== s) el.textContent = s; }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function toNum(v) { var n = parseFloat(v); return isFinite(n) ? n : null; }
+  function round(v) { var r = Math.round(v); return r === 0 ? 0 : r; } // avoid "-0"
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full or disabled */ } }
+
+  function parseQuery(s) {
+    var o = {};
+    s.replace(/^\?/, '').split('&').forEach(function (p) {
+      if (!p) return;
+      var i = p.indexOf('=');
+      try {
+        o[decodeURIComponent(i < 0 ? p : p.slice(0, i))] = i < 0 ? '1' : decodeURIComponent(p.slice(i + 1).replace(/\+/g, ' '));
+      } catch (e) { /* ignore malformed parameter */ }
+    });
+    return o;
+  }
+
+  function getJSON(url, cb) {
+    var x = new XMLHttpRequest(), done = false;
+    function fin(err, data) { if (done) return; done = true; cb(err, data); }
+    try {
+      x.open('GET', url, true);
+      x.timeout = 20000;
+      x.onload = function () {
+        if (x.status >= 200 && x.status < 300) {
+          try { fin(null, JSON.parse(x.responseText)); } catch (e) { fin(new Error('bad response')); }
+        } else fin(new Error('HTTP ' + x.status));
+      };
+      x.onerror = function () { fin(new Error('network error')); };
+      x.ontimeout = function () { fin(new Error('timeout')); };
+      x.send();
+    } catch (e) { fin(e); }
+  }
+
+  function distKm(a1, o1, a2, o2) {
+    var R = 6371, r = Math.PI / 180;
+    var dA = (a2 - a1) * r, dO = (o2 - o1) * r;
+    var h = Math.sin(dA / 2) * Math.sin(dA / 2) + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dO / 2) * Math.sin(dO / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function fmtCoord(lat, lon) {
+    return Math.abs(lat).toFixed(2) + '°' + (lat >= 0 ? 'N' : 'S') + ' ' + Math.abs(lon).toFixed(2) + '°' + (lon >= 0 ? 'E' : 'W');
+  }
+
+  // ---------------------------------------------------------------- time zone / DST
+  // The clock shows the time in the time zone of the detected location (IANA name from Open-Meteo),
+  // using the browser's time zone database, so summer/winter time switches happen automatically
+  // even if the phone's own time zone setting is wrong or fixed.
+  var tzFmt = null, tzFmtFor = null;
+
+  function validTZ(tz) {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch (e) { return false; }
+  }
+
+  function applyTZ() {
+    var tz = null;
+    if (CFG.tz === 'auto') tz = S.wx && S.wx.timezone;
+    else if (CFG.tz !== 'device') tz = CFG.tz;
+    S.tz = tz && window.Intl && validTZ(tz) ? tz : null;
+    lastDayKey = '';
+  }
+
+  // Minutes east of UTC for the active time zone at instant d.
+  function offsetMin(d) {
+    if (S.tz) {
+      if (tzFmtFor !== S.tz) {
+        tzFmtFor = S.tz;
+        try {
+          tzFmt = new Intl.DateTimeFormat('en-US', {
+            timeZone: S.tz, hour12: false, hourCycle: 'h23',
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: 'numeric', second: 'numeric'
+          });
+        } catch (e) { tzFmt = null; }
+      }
+      if (tzFmt) {
+        var m = tzFmt.format(d).match(/(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)/);
+        if (m) {
+          var asUTC = Date.UTC(+m[3], +m[1] - 1, +m[2], (+m[4]) % 24, +m[5], +m[6]);
+          return Math.round((asUTC - Math.floor(d.getTime() / 1000) * 1000) / 60000);
+        }
+      }
+    }
+    return -d.getTimezoneOffset();
+  }
+
+  function shifted(ms) { var off = offsetMin(new Date(ms)); return new Date(ms + off * 60000); }
+
+  function tzAbbr(d) {
+    var tz = S.tz;
+    if (!tz) { try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return ''; } }
+    var locales = ['en-US', 'en-GB'];
+    for (var i = 0; i < locales.length; i++) {
+      try {
+        var f = new Intl.DateTimeFormat(locales[i], { timeZone: tz, timeZoneName: 'short' });
+        if (!f.formatToParts) return '';
+        var parts = f.formatToParts(d);
+        for (var j = 0; j < parts.length; j++) {
+          if (parts[j].type === 'timeZoneName' && !/^(GMT|UTC)/.test(parts[j].value)) return parts[j].value;
+        }
+      } catch (e) { return ''; }
+    }
+    return '';
+  }
+
+  function nextTransition(nowMs) {
+    var off0 = offsetMin(new Date(nowMs)), DAY = 864e5, a = nowMs, b = 0, i;
+    for (i = 1; i <= 370; i++) {
+      var t = nowMs + i * DAY;
+      if (offsetMin(new Date(t)) !== off0) { b = t; a = t - DAY; break; }
+    }
+    if (!b) return null;
+    while (b - a > 60000) {
+      var mid = Math.floor((a + b) / 2);
+      if (offsetMin(new Date(mid)) === off0) a = mid; else b = mid;
+    }
+    return { at: b, off: offsetMin(new Date(b)), diff: offsetMin(new Date(b)) - off0 };
+  }
+
+  function utcLabel(off) {
+    var a = Math.abs(off);
+    return 'UTC' + (off < 0 ? '−' : '+') + pad(Math.floor(a / 60)) + ':' + pad(a % 60);
+  }
+
+  function renderTZ(now, off) {
+    var y = now.getUTCFullYear();
+    var oJan = offsetMin(new Date(Date.UTC(y, 0, 1))), oJul = offsetMin(new Date(Date.UTC(y, 6, 1)));
+    var hasDST = oJan !== oJul, isDST = hasDST && off > Math.min(oJan, oJul);
+    var abbr = tzAbbr(now);
+    var mode = !hasDST ? 'No daylight saving' : (isDST ? '☀️ Summer time' : '❄️ Winter time');
+    setText('tz', '🕑 ' + (abbr ? abbr + ' ' : '') + '(' + utcLabel(off) + ') · ' + mode);
+
+    var line2 = S.tz || '';
+    if (hasDST) {
+      var tr = nextTransition(now.getTime());
+      if (tr) {
+        var h = Math.abs(tr.diff) / 60;
+        line2 += (line2 ? ' · ' : '') + (tr.diff > 0 ? 'Summer' : 'Winter') + ' time from ' +
+          fmtShortDate(new Date(tr.at + tr.off * 60000)) + ' (clocks ' + (tr.diff > 0 ? '+' : '−') + h + ' h)';
+      }
+    }
+    setText('tz2', line2 || '\u00a0');
+  }
+
+  // ---------------------------------------------------------------- formatting
+  var EN_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var fmtCache = {};
+  // t is a "shifted" Date: its UTC fields hold the wall-clock time of the active time zone.
+  function intlFmt(key, opts) {
+    if (!(key in fmtCache)) {
+      try { opts.timeZone = 'UTC'; fmtCache[key] = new Intl.DateTimeFormat(CFG.lang, opts); } catch (e) { fmtCache[key] = null; }
+    }
+    return fmtCache[key];
+  }
+  function fmtDate(t) {
+    var f = intlFmt('long', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (f) return f.format(t);
+    return EN_DAYS[t.getUTCDay()] + ', ' + t.getUTCDate() + ' ' + EN_MONTHS[t.getUTCMonth()] + ' ' + t.getUTCFullYear();
+  }
+  function fmtShortDate(t) {
+    var f = intlFmt('short', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (f) return f.format(t);
+    return EN_DAYS[t.getUTCDay()].slice(0, 3) + ' ' + t.getUTCDate() + ' ' + EN_MONTHS[t.getUTCMonth()].slice(0, 3);
+  }
+  function fmtWeekday(t) {
+    var f = intlFmt('wd', { weekday: 'short' });
+    return f ? f.format(t) : EN_DAYS[t.getUTCDay()].slice(0, 3);
+  }
+  function fmtHM(h, m) {
+    if (!CFG.h12) return pad(h) + ':' + pad(m);
+    return (h % 12 || 12) + ':' + pad(m) + (h < 12 ? ' AM' : ' PM');
+  }
+  function fmtIsoHM(iso) { return iso ? fmtHM(+iso.slice(11, 13), +iso.slice(14, 16)) : '--:--'; }
+  function fmtIsoHour(iso) {
+    var h = +iso.slice(11, 13);
+    return CFG.h12 ? (h % 12 || 12) + (h < 12 ? 'a' : 'p') : pad(h) + ':00';
+  }
+  function clockStr(ms) { var t = shifted(ms); return fmtHM(t.getUTCHours(), t.getUTCMinutes()); }
+
+  // Location-local ISO time ("YYYY-MM-DDTHH:MM"), matching Open-Meteo's local timestamps.
+  function locIso(ms) {
+    var off = S.wx && isFinite(S.wx.utc_offset_seconds) ? S.wx.utc_offset_seconds * 1000 : offsetMin(new Date(ms)) * 60000;
+    return new Date(ms + off).toISOString().slice(0, 16);
+  }
+
+  function compass(deg) {
+    var d = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return isFinite(deg) ? d[Math.round(deg / 45) % 8] : '';
+  }
+
+  // WMO weather codes → [description, day icon, night icon]
+  var WMO = {
+    0: ['Clear sky', '☀️', '🌙'], 1: ['Mainly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'], 3: ['Overcast', '☁️'],
+    45: ['Fog', '🌫️'], 48: ['Freezing fog', '🌫️'],
+    51: ['Light drizzle', '🌦️', '🌧️'], 53: ['Drizzle', '🌦️', '🌧️'], 55: ['Heavy drizzle', '🌧️'],
+    56: ['Freezing drizzle', '🌧️'], 57: ['Heavy freezing drizzle', '🌧️'],
+    61: ['Light rain', '🌦️', '🌧️'], 63: ['Rain', '🌧️'], 65: ['Heavy rain', '🌧️'],
+    66: ['Freezing rain', '🌧️'], 67: ['Heavy freezing rain', '🌧️'],
+    71: ['Light snow', '🌨️'], 73: ['Snow', '🌨️'], 75: ['Heavy snow', '❄️'], 77: ['Snow grains', '🌨️'],
+    80: ['Light showers', '🌦️', '🌧️'], 81: ['Rain showers', '🌧️'], 82: ['Violent showers', '⛈️'],
+    85: ['Snow showers', '🌨️'], 86: ['Heavy snow showers', '❄️'],
+    95: ['Thunderstorm', '⛈️'], 96: ['Thunderstorm with hail', '⛈️'], 99: ['Thunderstorm, heavy hail', '⛈️']
+  };
+  function wmo(code, isDay) {
+    var w = WMO[code] || ['Unknown', '❔'];
+    return { t: w[0], i: (isDay === 0 && w[2]) ? w[2] : w[1] };
+  }
+
+  // ---------------------------------------------------------------- location
+  function langCode() { return encodeURIComponent(CFG.lang.split('-')[0]); }
+  function cleanRegion(s) { return (s || '').replace(/\s*\[.*\]\s*$/, ''); }
+
+  function getPosition(highAccuracy, timeout, cb) {
+    if (!navigator.geolocation) return cb({ code: -1, message: 'geolocation not supported' });
+    var done = false;
+    var guard = setTimeout(function () { if (!done) { done = true; cb({ code: 3, message: 'timeout' }); } }, timeout + 5000);
+    function fin(err, pos) { if (done) return; done = true; clearTimeout(guard); cb(err, pos); }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        function (p) { fin(null, p); },
+        function (e) { fin(e || { code: 2 }); },
+        { enableHighAccuracy: highAccuracy, timeout: timeout, maximumAge: highAccuracy ? 5 * 60000 : 15 * 60000 }
+      );
+    } catch (e) { fin({ code: -1, message: String(e) }); }
+  }
+
+  // Manual coordinates → Wi-Fi/network location → GPS → IP-based approximation.
+  function detectPlace(cb) {
+    if (CFG.lat !== null && CFG.lon !== null) return nameFor({ lat: CFG.lat, lon: CFG.lon, source: 'manual' }, cb);
+    getPosition(false, 20000, function (err, p) {
+      if (!err) return fromPosition(p, cb);
+      if (err.code === 1) return ipLocate(cb); // permission denied
+      getPosition(true, 30000, function (err2, p2) {
+        if (!err2) return fromPosition(p2, cb);
+        ipLocate(cb);
+      });
+    });
+  }
+
+  function fromPosition(p, cb) {
+    nameFor({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy || 0), source: 'device' }, cb);
+  }
+
+  function nameFor(pl, cb) {
+    if (CFG.name) { pl.name = CFG.name; return cb(null, pl); }
+    var old = S.place;
+    if (old && old.name && isFinite(old.lat) && distKm(old.lat, old.lon, pl.lat, pl.lon) < 3) {
+      pl.name = old.name; pl.region = old.region; pl.country = old.country;
+      return cb(null, pl);
+    }
+    getJSON('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + pl.lat + '&longitude=' + pl.lon +
+      '&localityLanguage=' + langCode(), function (err, d) {
+      if (!err && d && (d.city || d.locality)) {
+        pl.name = d.city || d.locality; pl.region = cleanRegion(d.principalSubdivision); pl.country = d.countryName || '';
+        return cb(null, pl);
+      }
+      getJSON('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=' + pl.lat + '&lon=' + pl.lon +
+        '&accept-language=' + langCode(), function (err2, n) {
+        var a = n && n.address;
+        if (!err2 && a) {
+          pl.name = a.city || a.town || a.village || a.municipality || a.county || '';
+          pl.region = a.state || ''; pl.country = a.country || '';
+        }
+        if (!pl.name) pl.name = fmtCoord(pl.lat, pl.lon);
+        cb(null, pl);
+      });
+    });
+  }
+
+  function ipLocate(cb) {
+    getJSON('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=' + langCode(), function (err, d) {
+      if (!err && d && isFinite(d.latitude) && isFinite(d.longitude) && (d.latitude || d.longitude)) {
+        return cb(null, {
+          lat: d.latitude, lon: d.longitude, source: 'ip',
+          name: CFG.name || d.city || d.locality || fmtCoord(d.latitude, d.longitude),
+          region: cleanRegion(d.principalSubdivision), country: d.countryName || ''
+        });
+      }
+      getJSON('https://ipapi.co/json/', function (err2, i) {
+        if (!err2 && i && isFinite(i.latitude) && isFinite(i.longitude)) {
+          return cb(null, {
+            lat: i.latitude, lon: i.longitude, source: 'ip',
+            name: CFG.name || i.city || fmtCoord(i.latitude, i.longitude), region: i.region || '', country: i.country_name || ''
+          });
+        }
+        cb(new Error('location unavailable'));
+      });
+    });
+  }
+
+  function renderPlace() {
+    var p = S.place;
+    if (!p) { setText('place', '📍 Locating…'); setText('placeSub', '\u00a0'); return; }
+    setText('place', '📍 ' + p.name);
+    var sub = [];
+    if (p.region && p.region !== p.name) sub.push(p.region);
+    if (p.country && p.country !== p.name) sub.push(p.country);
+    var src = p.source === 'manual' ? '📌 fixed location'
+      : p.source === 'device' ? '📡 GPS / Wi-Fi' + (p.acc ? ' ±' + (p.acc >= 1000 ? (p.acc / 1000).toFixed(1) + ' km' : p.acc + ' m') : '')
+      : '🌐 approximate (IP)';
+    sub.push(src);
+    setText('placeSub', sub.join(' · '));
+  }
+
+  // ---------------------------------------------------------------- weather
+  function fetchWeather(pl, cb) {
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + (+pl.lat).toFixed(4) + '&longitude=' + (+pl.lon).toFixed(4) +
+      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,precipitation' +
+      '&hourly=temperature_2m,weather_code,precipitation_probability,is_day' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max' +
+      '&timezone=auto&forecast_days=7&wind_speed_unit=' + CFG.wind +
+      (CFG.imperial ? '&temperature_unit=fahrenheit&precipitation_unit=inch' : '');
+    getJSON(url, function (err, d) {
+      if (!err && (!d || !d.current || !d.hourly || !d.daily)) err = new Error((d && d.reason) || 'bad weather data');
+      cb(err, d);
+    });
+  }
+
+  function todayIndex(d) {
+    var today = locIso(Date.now()).slice(0, 10), t = d.daily.time;
+    for (var i = 0; i < t.length; i++) if (t[i] === today) return i;
+    return 0;
+  }
+
+  function renderWeather() {
+    var d = S.wx;
+    if (!d || !d.current || !d.hourly || !d.daily) return;
+    var c = d.current, dl = d.daily, hr = d.hourly, i, html;
+    var ti = todayIndex(d);
+
+    var w = wmo(c.weather_code, c.is_day);
+    setText('nowIcon', w.i);
+    setText('nowTemp', round(c.temperature_2m) + '°' + (CFG.imperial ? 'F' : 'C'));
+    setText('nowDesc', w.t);
+
+    var wind = WIND_LABEL[CFG.wind];
+    var det = [
+      'Feels <b>' + round(c.apparent_temperature) + '°</b>',
+      '↑ <b>' + round(dl.temperature_2m_max[ti]) + '°</b> ↓ <b>' + round(dl.temperature_2m_min[ti]) + '°</b>',
+      '💧 <b>' + round(c.relative_humidity_2m) + '%</b>',
+      '💨 <b>' + round(c.wind_speed_10m) + '</b> ' + wind + ' ' + compass(c.wind_direction_10m) +
+        (isFinite(c.wind_gusts_10m) && c.wind_gusts_10m > c.wind_speed_10m * 1.3 ? ' (gusts ' + round(c.wind_gusts_10m) + ')' : ''),
+      '⏲ <b>' + round(c.pressure_msl) + '</b> hPa',
+      '🌅 <b>' + fmtIsoHM(dl.sunrise[ti]) + '</b> 🌇 <b>' + fmtIsoHM(dl.sunset[ti]) + '</b>'
+    ];
+    if (isFinite(dl.uv_index_max[ti]) && dl.uv_index_max[ti] >= 3) det.push('UV <b>' + round(dl.uv_index_max[ti]) + '</b>');
+    $('nowDetails').innerHTML = '<span>' + det.join('</span><span>') + '</span>';
+
+    // Daily: today + 4 days, with a temperature range bar scaled to the shown days.
+    var n = Math.min(5, dl.time.length - ti), lo = Infinity, hi = -Infinity;
+    for (i = ti; i < ti + n; i++) { lo = Math.min(lo, dl.temperature_2m_min[i]); hi = Math.max(hi, dl.temperature_2m_max[i]); }
+    var span = Math.max(1, hi - lo);
+    html = '';
+    for (i = ti; i < ti + n; i++) {
+      var ds = dl.time[i], dw = wmo(dl.weather_code[i]);
+      var name = i === ti ? 'Today' : fmtWeekday(new Date(Date.UTC(+ds.slice(0, 4), +ds.slice(5, 7) - 1, +ds.slice(8, 10))));
+      var mn = dl.temperature_2m_min[i], mx = dl.temperature_2m_max[i], pp = dl.precipitation_probability_max[i];
+      html += '<div class="day"><span class="dn">' + esc(name) + '</span>' +
+        '<span class="di emo" title="' + esc(dw.t) + '">' + dw.i + '</span>' +
+        '<span class="dp">' + (pp >= 10 ? pp + '%' : '') + '</span>' +
+        '<span class="dl">' + round(mn) + '°</span>' +
+        '<span class="bar"><i style="left:' + ((mn - lo) / span * 100).toFixed(1) + '%;width:' + Math.max(4, (mx - mn) / span * 100).toFixed(1) + '%"></i></span>' +
+        '<span class="dh">' + round(mx) + '°</span></div>';
+    }
+    $('daily').innerHTML = html;
+
+    // Hourly: the next 12 hours.
+    var nowKey = locIso(Date.now()).slice(0, 13), start = -1;
+    for (i = 0; i < hr.time.length; i++) {
+      if (hr.time[i].slice(0, 13) === nowKey) { start = i + 1; break; }
+      if (hr.time[i].slice(0, 13) > nowKey) { start = i; break; }
+    }
+    if (start < 0) start = 0;
+    html = '';
+    for (i = start; i < Math.min(start + 12, hr.time.length); i++) {
+      var hw = wmo(hr.weather_code[i], hr.is_day[i]), hp = hr.precipitation_probability[i];
+      html += '<div class="h"><span class="ht">' + fmtIsoHour(hr.time[i]) + '</span>' +
+        '<span class="hi emo" title="' + esc(hw.t) + '">' + hw.i + '</span>' +
+        '<span class="hv">' + round(hr.temperature_2m[i]) + '°</span>' +
+        '<span class="hp">' + (hp >= 10 ? '💧' + hp + '%' : '') + '</span></div>';
+    }
+    $('hourly').innerHTML = html;
+
+    updateNight();
+  }
+
+  // Dim the display between sunset and sunrise at the current location.
+  function updateNight() {
+    var night = false, d = S.wx;
+    if (CFG.dim && d && d.daily) {
+      var ti = todayIndex(d), now = locIso(Date.now()), sr = d.daily.sunrise[ti], ss = d.daily.sunset[ti];
+      night = sr && ss ? (now < sr || now >= ss) : d.current && d.current.is_day === 0;
+    }
+    var cls = night ? 'night' : '';
+    if (app.className !== cls) app.className = cls;
+  }
+
+  // ---------------------------------------------------------------- refresh cycle
+  var timer = null, busy = false;
+
+  function schedule(ms) {
+    clearTimeout(timer);
+    S.nextAt = Date.now() + ms;
+    timer = setTimeout(refresh, ms);
+    renderStatus();
+  }
+
+  function onWeather(err, d) {
+    if (err) { S.lastError = 'Weather: ' + err.message; return false; }
+    d._fetched = Date.now();
+    S.wx = d; S.lastError = '';
+    save('hc.wx', d);
+    applyTZ();
+    renderWeather();
+    return true;
+  }
+
+  function refresh() {
+    if (busy && Date.now() - S.busySince < 3 * 60000) return;
+    busy = true; S.busySince = Date.now();
+    clearTimeout(timer);
+    renderStatus();
+    detectPlace(function (err, pl) {
+      if (!err && pl) { pl.time = Date.now(); S.place = pl; save('hc.place', pl); }
+      renderPlace();
+      if (!S.place) {
+        busy = false;
+        S.lastError = 'Location unavailable – allow location access, or add ?lat=..&lon=.. to the URL';
+        return schedule(RETRY_MS);
+      }
+      fetchWeather(S.place, function (err2, d) {
+        busy = false;
+        schedule(onWeather(err2, d) ? REFRESH_MS : RETRY_MS);
+      });
+    });
+  }
+
+  // First run without a cached location: show an IP-based location right away while GPS / Wi-Fi is being resolved.
+  function quickStart() {
+    if (S.place || CFG.lat !== null) return;
+    ipLocate(function (err, pl) {
+      if (err || S.place) return;
+      S.place = pl; renderPlace();
+      fetchWeather(pl, function (err2, d) { if (S.place === pl) onWeather(err2, d); renderStatus(); });
+    });
+  }
+
+  function renderStatus() {
+    var parts = [];
+    if (S.wx && S.wx._fetched) {
+      var stale = Date.now() - S.wx._fetched > 3 * REFRESH_MS;
+      parts.push((stale ? '⚠ ' : '') + 'Weather updated ' + clockStr(S.wx._fetched));
+    }
+    if (busy) parts.push('updating…');
+    else if (S.nextAt) parts.push('next ' + clockStr(S.nextAt));
+    if (navigator.onLine === false) parts.push('⚠ offline');
+    setText('stLeft', parts.join(' · '));
+    setText('stErr', S.lastError);
+    setText('stRight', (isFullscreen() ? '' : 'Tap for fullscreen · ') + 'Weather: Open-Meteo');
+  }
+
+  // ---------------------------------------------------------------- clock
+  var lastDayKey = '', lastMin = -1, lastHourKey = '';
+
+  function tick() {
+    var nowMs = Date.now(), now = new Date(nowMs);
+    var off = offsetMin(now);
+    var t = new Date(nowMs + off * 60000);
+    var h = t.getUTCHours(), m = t.getUTCMinutes(), s = t.getUTCSeconds();
+
+    setText('hm', CFG.h12 ? (h % 12 || 12) + ':' + pad(m) : pad(h) + ':' + pad(m));
+    setText('sec', pad(s));
+    setText('ampm', CFG.h12 ? (h < 12 ? 'AM' : 'PM') : '');
+
+    var dayKey = t.getUTCFullYear() + '-' + t.getUTCMonth() + '-' + t.getUTCDate() + '|' + off + '|' + S.tz;
+    if (dayKey !== lastDayKey) {
+      lastDayKey = dayKey;
+      setText('date', fmtDate(t));
+      renderTZ(now, off);
+    }
+    if (m !== lastMin) {
+      lastMin = m;
+      var hourKey = locIso(nowMs).slice(0, 13);
+      if (hourKey !== lastHourKey) { lastHourKey = hourKey; renderWeather(); }
+      updateNight();
+      renderStatus();
+    }
+    // Timers are throttled while the screen is off – catch up if a refresh was missed.
+    if (S.nextAt && nowMs > S.nextAt + 5000 && !busy) refresh();
+
+    setTimeout(tick, 1000 - (Date.now() % 1000) + 20);
+  }
+
+  // ---------------------------------------------------------------- screen: layout, fullscreen, wake lock
+  function layout() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var rot = CFG.rotate && h > w * 1.05; // phone held in portrait → rotate content to landscape
+    var W = rot ? h : w, H = rot ? w : h;
+    var unit = Math.min(H / 10, W / 17);
+    document.documentElement.style.fontSize = unit + 'px';
+    app.style.width = W + 'px';
+    app.style.height = H + 'px';
+    var tr = rot ? 'translateX(' + w + 'px) rotate(90deg)' : 'none';
+    app.style.webkitTransform = tr;
+    app.style.transform = tr;
+  }
+
+  function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+
+  function lockLandscape() {
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        var p = screen.orientation.lock('landscape');
+        if (p && p.then) p.then(null, function () {});
+      }
+    } catch (e) { /* not supported */ }
+  }
+
+  function enterFullscreen() {
+    if (isFullscreen()) return;
+    var el = document.documentElement, rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!rfs) return;
+    try {
+      var p = rfs.call(el);
+      if (p && p.then) p.then(lockLandscape, function () {}); else setTimeout(lockLandscape, 300);
+    } catch (e) { /* ignore */ }
+  }
+
+  var wakeLock = null;
+  function requestWakeLock() {
+    if (!('wakeLock' in navigator) || wakeLock || document.hidden) return;
+    try {
+      navigator.wakeLock.request('screen').then(function (l) {
+        wakeLock = l;
+        l.addEventListener('release', function () { wakeLock = null; });
+      }, function () {});
+    } catch (e) { /* not supported */ }
+  }
+
+  // ---------------------------------------------------------------- start
+  layout();
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', function () { setTimeout(layout, 300); });
+  document.addEventListener('click', function () { enterFullscreen(); requestWakeLock(); });
+  document.addEventListener('fullscreenchange', renderStatus);
+  document.addEventListener('webkitfullscreenchange', renderStatus);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    requestWakeLock();
+    lastDayKey = '';
+    if (!S.nextAt || Date.now() >= S.nextAt - 1000) refresh();
+  });
+  window.addEventListener('online', function () { if (S.lastError) refresh(); else renderStatus(); });
+  window.addEventListener('offline', renderStatus);
+
+  applyTZ();
+  renderPlace();
+  renderWeather();
+  tick();
+  quickStart();
+  refresh();
+  requestWakeLock();
+
+  setInterval(function () {
+    if (navigator.onLine !== false && !busy) window.location.reload();
+  }, RELOAD_MS);
+
+  if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+    try { navigator.serviceWorker.register('sw.js').then(null, function () {}); } catch (e) { /* ignore */ }
+  }
+})();
+</script>
+</body>
+</html>
