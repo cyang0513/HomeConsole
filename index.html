@@ -38,10 +38,10 @@
   /* ---------- Clock ---------- */
   #clock { flex: 1.8; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding-right: .35rem; }
   #timeRow { display: flex; align-items: flex-start; line-height: 1; white-space: nowrap; }
-  #hm { font-size: 3.75rem; font-weight: 300; letter-spacing: -.04em; color: #fff; }
-  #secBox { display: flex; flex-direction: column; margin-left: .12rem; padding-top: .46rem; }
-  #sec { font-size: .88rem; font-weight: 400; color: #dadce0; }
-  #ampm { font-size: .45rem; color: #dadce0; margin-top: .06rem; }
+  #hm { font-size: 4.1rem; font-weight: 700; letter-spacing: -.03em; color: #fff; }
+  #secBox { display: flex; flex-direction: column; margin-left: .12rem; padding-top: .5rem; }
+  #sec { font-size: .88rem; font-weight: 700; color: #f1f3f4; }
+  #ampm { font-size: .45rem; font-weight: 700; color: #f1f3f4; margin-top: .06rem; }
   #date { font-size: .68rem; font-weight: 400; color: #f1f3f4; margin-top: .08rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #place { font-size: .54rem; color: #8ab4f8; margin-top: .36rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #placeSub { font-size: .3rem; color: #bdc1c6; margin-top: .05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -716,6 +716,25 @@
     var tr = rot ? 'translateX(' + w + 'px) rotate(90deg)' : 'none';
     app.style.webkitTransform = tr;
     app.style.transform = tr;
+    fitClock();
+  }
+
+  // HH:MM is styled as large as possible; shrink it only if it would overflow the clock column.
+  function fitClock() {
+    var hm = $('hm'), sec = $('sec'), secBox = $('secBox'), clock = $('clock');
+    var hmText = hm.textContent, secText = sec.textContent;
+    hm.style.fontSize = '';
+    hm.textContent = '00:00'; // digits are tabular, so this is the widest time
+    sec.textContent = '00';
+    var cs = window.getComputedStyle(clock);
+    var avail = clock.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var hmW = hm.offsetWidth;
+    var extra = hmW + secBox.offsetWidth + parseFloat(window.getComputedStyle(secBox).marginLeft) - avail;
+    if (extra > 0 && hmW > extra) {
+      hm.style.fontSize = (parseFloat(window.getComputedStyle(hm).fontSize) * (hmW - extra - 2) / hmW) + 'px';
+    }
+    hm.textContent = hmText;
+    sec.textContent = secText;
   }
 
   function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
