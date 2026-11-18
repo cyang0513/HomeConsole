@@ -119,7 +119,7 @@
  *                          device = phone setting, or any IANA time zone name
  *   &lang=zh|en            page language (default: phone language – Chinese phones get Chinese, all others English).
  *                          Other codes (e.g. sv) show English labels with dates / place names in that language.
- *   &dim=0.7               brightness between sunset and sunrise (0.1–1, default 0.85; dim=0 or dim=1 = no dimming)
+ *   &dim=0.7               dim the page to this brightness between sunset and sunrise (0.1–0.99; default: no dimming)
  *   &rotate=0              do not rotate the layout when the phone is held in portrait
  */
 (function () {
@@ -139,7 +139,7 @@
     h12: q.h12 === '1' || q.h12 === 'true',
     tz: q.tz || 'auto',
     lang: q.lang || navigator.language || 'en',
-    dim: q.dim === undefined ? 0.85 : (parseFloat(q.dim) >= 0.1 && parseFloat(q.dim) < 1 ? parseFloat(q.dim) : 0),
+    dim: parseFloat(q.dim) >= 0.1 && parseFloat(q.dim) < 1 ? parseFloat(q.dim) : 0,
     rotate: q.rotate !== '0'
   };
   if (!CFG.wind) CFG.wind = CFG.imperial ? 'mph' : 'kmh';
