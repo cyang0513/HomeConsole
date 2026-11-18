@@ -44,9 +44,7 @@
   #ampm { font-size: .45rem; font-weight: 700; color: #f1f3f4; margin-top: .06rem; }
   #date { font-size: .68rem; font-weight: 400; color: #f1f3f4; margin-top: .08rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #place { font-size: .54rem; color: #8ab4f8; margin-top: .36rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #placeSub { font-size: .3rem; color: #bdc1c6; margin-top: .05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tz { font-size: .32rem; color: #dadce0; margin-top: .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #tz2 { font-size: .28rem; color: #9aa0a6; margin-top: .05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ---------- Current weather + daily ---------- */
   #wx { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid #202124; padding-left: .35rem; }
@@ -84,9 +82,7 @@
       </div>
       <div id="date">&nbsp;</div>
       <div id="place">📍 …</div>
-      <div id="placeSub">&nbsp;</div>
       <div id="tz">&nbsp;</div>
-      <div id="tz2">&nbsp;</div>
     </section>
     <section id="wx">
       <div id="now">
@@ -119,7 +115,8 @@
  *                          device = phone setting, or any IANA time zone name
  *   &lang=zh|en            page language (default: phone language – Chinese phones get Chinese, all others English).
  *                          Other codes (e.g. sv) show English labels with dates / place names in that language.
- *   &dim=0.7               dim the page to this brightness between sunset and sunrise (0.1–0.99; default: no dimming)
+ *   &dim=0.7               brightness during the night hours (0.1–0.99, default 0.85; dim=1 = no dimming)
+ *   &night=21-8            night hours for dimming, start-end in the clock's time zone (default 21-8 = 21:00–08:00)
  *   &rotate=0              do not rotate the layout when the phone is held in portrait
  */
 (function () {
@@ -139,7 +136,8 @@
     h12: q.h12 === '1' || q.h12 === 'true',
     tz: q.tz || 'auto',
     lang: q.lang || navigator.language || 'en',
-    dim: parseFloat(q.dim) >= 0.1 && parseFloat(q.dim) < 1 ? parseFloat(q.dim) : 0,
+    dim: q.dim === undefined ? 0.85 : (parseFloat(q.dim) >= 0.1 && parseFloat(q.dim) < 1 ? parseFloat(q.dim) : 0),
+    night: parseNight(q.night),
     rotate: q.rotate !== '0'
   };
   if (!CFG.wind) CFG.wind = CFG.imperial ? 'mph' : 'kmh';
@@ -156,11 +154,7 @@
   var I18N = {
     en: {
       locating: 'Locating…', loading: 'Loading weather…', today: 'Today', feels: 'Feels', gusts: function (v) { return ' (gusts ' + v + ')'; }, uv: 'UV',
-      fixed: 'fixed location', device: 'GPS / Wi-Fi', ip: 'approximate (IP)', m: ' m', km: ' km',
       noDst: 'No daylight saving', summer: '☀️ Summer time', winter: '❄️ Winter time',
-      nextChange: function (toSummer, date, h) {
-        return (toSummer ? 'Summer' : 'Winter') + ' time from ' + date + ' (clocks ' + (toSummer ? '+' : '−') + h + ' h)';
-      },
       updated: 'Weather updated ', updating: 'updating…', next: 'next ', offline: '⚠ offline',
       tapFs: 'Tap for fullscreen · ', source: 'Weather: Open-Meteo',
       errLoc: 'Location unavailable – allow location access, or add ?lat=..&lon=.. to the URL', errWx: 'Weather: ',
@@ -180,11 +174,7 @@
     },
     zh: {
       locating: '正在定位…', loading: '正在加载天气…', today: '今天', feels: '体感', gusts: function (v) { return '（阵风 ' + v + '）'; }, uv: '紫外线',
-      fixed: '固定位置', device: 'GPS / Wi-Fi 定位', ip: '大致位置（IP）', m: ' 米', km: ' 公里',
       noDst: '无夏令时', summer: '☀️ 夏令时', winter: '❄️ 冬令时',
-      nextChange: function (toSummer, date, h) {
-        return date + '起' + (toSummer ? '夏令时' : '冬令时') + '（时钟' + (toSummer ? '拨快 ' : '拨慢 ') + h + ' 小时）';
-      },
       updated: '天气更新于 ', updating: '正在更新…', next: '下次更新 ', offline: '⚠ 网络已断开',
       tapFs: '点击屏幕全屏 · ', source: '天气数据：Open-Meteo',
       errLoc: '无法获取位置 – 请允许定位权限，或在网址后添加 ?lat=..&lon=..', errWx: '天气：',
@@ -222,6 +212,11 @@
   function setText(id, s) { var el = $(id); if (el && el.textContent !== s) el.textContent = s; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function toNum(v) { var n = parseFloat(v); return isFinite(n) ? n : null; }
+  // "21-8" → [21, 8]; falls back to 21:00–08:00.
+  function parseNight(v) {
+    var m = /^(\d{1,2})-(\d{1,2})$/.exec(v || '');
+    return m && +m[1] < 24 && +m[2] < 24 ? [+m[1], +m[2]] : [21, 8];
+  }
   function round(v) { var r = Math.round(v); return r === 0 ? 0 : r; } // avoid "-0"
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -328,34 +323,6 @@
     return '';
   }
 
-  // Chinese: localized zone name (e.g. 中欧标准时间); English: the short IANA id (e.g. Europe/Stockholm).
-  function tzDisplayName(d) {
-    if (UI === 'zh' && S.tz) {
-      try {
-        var parts = new Intl.DateTimeFormat(LOCALE, { timeZone: S.tz, timeZoneName: 'long' }).formatToParts(d);
-        for (var j = 0; j < parts.length; j++) {
-          if (parts[j].type === 'timeZoneName' && !/^(GMT|UTC)/.test(parts[j].value)) return parts[j].value;
-        }
-      } catch (e) { /* fall through */ }
-      return '';
-    }
-    return S.tz || '';
-  }
-
-  function nextTransition(nowMs) {
-    var off0 = offsetMin(new Date(nowMs)), DAY = 864e5, a = nowMs, b = 0, i;
-    for (i = 1; i <= 370; i++) {
-      var t = nowMs + i * DAY;
-      if (offsetMin(new Date(t)) !== off0) { b = t; a = t - DAY; break; }
-    }
-    if (!b) return null;
-    while (b - a > 60000) {
-      var mid = Math.floor((a + b) / 2);
-      if (offsetMin(new Date(mid)) === off0) a = mid; else b = mid;
-    }
-    return { at: b, off: offsetMin(new Date(b)), diff: offsetMin(new Date(b)) - off0 };
-  }
-
   function utcLabel(off) {
     var a = Math.abs(off);
     return 'UTC' + (off < 0 ? '−' : '+') + pad(Math.floor(a / 60)) + ':' + pad(a % 60);
@@ -368,16 +335,6 @@
     var abbr = tzAbbr(now);
     var mode = !hasDST ? L.noDst : (isDST ? L.summer : L.winter);
     setText('tz', '🕑 ' + (abbr ? abbr + ' ' : '') + '(' + utcLabel(off) + ') · ' + mode);
-
-    var line2 = tzDisplayName(now);
-    if (hasDST) {
-      var tr = nextTransition(now.getTime());
-      if (tr) {
-        var h = Math.abs(tr.diff) / 60;
-        line2 += (line2 ? ' · ' : '') + L.nextChange(tr.diff > 0, fmtShortDate(new Date(tr.at + tr.off * 60000)), h);
-      }
-    }
-    setText('tz2', line2 || '\u00a0');
   }
 
   // ---------------------------------------------------------------- formatting
@@ -395,11 +352,6 @@
     var f = intlFmt('long', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     if (f) return f.format(t);
     return EN_DAYS[t.getUTCDay()] + ', ' + t.getUTCDate() + ' ' + EN_MONTHS[t.getUTCMonth()] + ' ' + t.getUTCFullYear();
-  }
-  function fmtShortDate(t) {
-    var f = intlFmt('short', { weekday: 'short', day: 'numeric', month: 'short' });
-    if (f) return f.format(t);
-    return EN_DAYS[t.getUTCDay()].slice(0, 3) + ' ' + t.getUTCDate() + ' ' + EN_MONTHS[t.getUTCMonth()].slice(0, 3);
   }
   function fmtWeekday(t) {
     var f = intlFmt('wd', { weekday: 'short' });
@@ -521,16 +473,8 @@
 
   function renderPlace() {
     var p = S.place;
-    if (!p) { setText('place', '📍 ' + L.locating); setText('placeSub', '\u00a0'); return; }
+    if (!p) { setText('place', '📍 ' + L.locating); return; }
     setText('place', '📍 ' + p.name);
-    var sub = [];
-    if (p.region && p.region !== p.name) sub.push(p.region);
-    if (p.country && p.country !== p.name) sub.push(p.country);
-    var src = p.source === 'manual' ? '📌 ' + L.fixed
-      : p.source === 'device' ? '📡 ' + L.device + (p.acc ? ' ±' + (p.acc >= 1000 ? (p.acc / 1000).toFixed(1) + L.km : p.acc + L.m) : '')
-      : '🌐 ' + L.ip;
-    sub.push(src);
-    setText('placeSub', sub.join(' · '));
   }
 
   // ---------------------------------------------------------------- weather
@@ -597,13 +541,10 @@
     updateNight();
   }
 
-  // Dim the display between sunset and sunrise at the current location.
+  // Dim the display during the night hours (clock time in the displayed time zone).
   function updateNight() {
-    var night = false, d = S.wx;
-    if (CFG.dim && d && d.daily) {
-      var ti = todayIndex(d), now = locIso(Date.now()), sr = d.daily.sunrise[ti], ss = d.daily.sunset[ti];
-      night = sr && ss ? (now < sr || now >= ss) : d.current && d.current.is_day === 0;
-    }
+    var h = shifted(Date.now()).getUTCHours(), from = CFG.night[0], to = CFG.night[1];
+    var night = CFG.dim > 0 && (from <= to ? h >= from && h < to : h >= from || h < to);
     var op = night ? String(CFG.dim) : '';
     if (app.style.opacity !== op) app.style.opacity = op;
   }
