@@ -48,14 +48,14 @@
 
   /* ---------- Current weather + daily ---------- */
   #wx { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid #202124; padding-left: .35rem; }
-  #now { display: flex; align-items: center; height: 1.95rem; }
-  #nowIcon { font-size: 1.25rem; width: 1.55rem; text-align: center; line-height: 1; }
+  #now { display: flex; align-items: center; height: 2.2rem; }
+  #nowIcon { font-size: 1.4rem; width: 1.6rem; text-align: center; line-height: 1; }
   #nowMain { min-width: 0; flex: 1; margin-left: .1rem; }
-  #nowTemp { font-size: 1.45rem; font-weight: 400; line-height: 1; color: #fff; }
-  #nowDesc { font-size: .4rem; line-height: 1.25; color: #f1f3f4; margin-top: .04rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #nowDetails { font-size: .29rem; color: #dadce0; line-height: 1.55; margin-top: .06rem; }
+  #nowTemp { font-size: 1.75rem; font-weight: 700; line-height: 1; color: #fff; white-space: nowrap; }
+  #nowDesc { font-size: .46rem; font-weight: 700; line-height: 1.25; color: #fff; margin-top: .05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nowDetails { font-size: .34rem; color: #e8eaed; line-height: 1.5; margin-top: .06rem; }
   #nowDetails span { display: inline-block; margin-right: .26rem; white-space: nowrap; }
-  #nowDetails b { color: #fff; font-weight: 500; }
+  #nowDetails b { color: #fff; font-weight: 700; }
 
   #daily { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; margin-top: .08rem; }
   .day { display: flex; align-items: center; font-size: .34rem; height: .5rem; white-space: nowrap; }
@@ -480,9 +480,9 @@
   // ---------------------------------------------------------------- weather
   function fetchWeather(pl, cb) {
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + (+pl.lat).toFixed(4) + '&longitude=' + (+pl.lon).toFixed(4) +
-      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,precipitation' +
+      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation' +
       '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max' +
-      '&timezone=auto&forecast_days=8&wind_speed_unit=' + CFG.wind +
+      '&timezone=auto&forecast_days=6&wind_speed_unit=' + CFG.wind +
       (CFG.imperial ? '&temperature_unit=fahrenheit&precipitation_unit=inch' : '');
     getJSON(url, function (err, d) {
       if (!err && (!d || !d.current || !d.daily)) err = new Error((d && d.reason) || 'bad weather data');
@@ -505,6 +505,7 @@
     var w = wmo(c.weather_code, c.is_day);
     setText('nowIcon', w.i);
     setText('nowTemp', round(c.temperature_2m) + '°' + (CFG.imperial ? 'F' : 'C'));
+    fitTemp();
     setText('nowDesc', w.t);
 
     var wind = WIND_LABEL[CFG.wind];
@@ -514,14 +515,13 @@
       '💧 <b>' + round(c.relative_humidity_2m) + '%</b>',
       '💨 <b>' + round(c.wind_speed_10m) + '</b> ' + wind + ' ' + compass(c.wind_direction_10m) +
         (isFinite(c.wind_gusts_10m) && c.wind_gusts_10m > c.wind_speed_10m * 1.3 ? L.gusts(round(c.wind_gusts_10m)) : ''),
-      '⏲ <b>' + round(c.pressure_msl) + '</b> hPa',
       '🌅 <b>' + fmtIsoHM(dl.sunrise[ti]) + '</b> 🌇 <b>' + fmtIsoHM(dl.sunset[ti]) + '</b>'
     ];
     if (isFinite(dl.uv_index_max[ti]) && dl.uv_index_max[ti] >= 3) det.push(L.uv + ' <b>' + round(dl.uv_index_max[ti]) + '</b>');
     $('nowDetails').innerHTML = '<span>' + det.join('</span><span>') + '</span>';
 
-    // Daily: today + 6 days, with a temperature range bar scaled to the shown days.
-    var n = Math.min(7, dl.time.length - ti), lo = Infinity, hi = -Infinity;
+    // Daily: today + 4 days, with a temperature range bar scaled to the shown days.
+    var n = Math.min(5, dl.time.length - ti), lo = Infinity, hi = -Infinity;
     for (i = ti; i < ti + n; i++) { lo = Math.min(lo, dl.temperature_2m_min[i]); hi = Math.max(hi, dl.temperature_2m_max[i]); }
     var span = Math.max(1, hi - lo);
     html = '';
@@ -658,6 +658,16 @@
     app.style.webkitTransform = tr;
     app.style.transform = tr;
     fitClock();
+    fitTemp();
+  }
+
+  // Current temperature: shrink only when a wide value (e.g. -14°C) would overflow the weather column.
+  function fitTemp() {
+    var t = $('nowTemp'), avail = $('nowMain').clientWidth;
+    t.style.fontSize = '';
+    if (avail > 0 && t.scrollWidth > avail) {
+      t.style.fontSize = (parseFloat(window.getComputedStyle(t).fontSize) * (avail - 2) / t.scrollWidth) + 'px';
+    }
   }
 
   // HH:MM is styled as large as possible; shrink it only if it would overflow the clock column.
